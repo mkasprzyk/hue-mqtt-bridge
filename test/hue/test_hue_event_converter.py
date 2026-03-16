@@ -63,11 +63,10 @@ class TestHueEventConverter(unittest.TestCase):
 
             event_exp = ThingEvent()
             event_exp.id = hue_item.id
-
-            # event_exp.name = None  # name has to be matched via device
             event_exp.type = "light"
             event_exp.status = ThingStatus.ON if is_on else ThingStatus.OFF
             event_exp.brightness = expected_brightness
+            event_exp.color_xy = (0.502, 0.44)
 
             event_out = HueEventConverter.to_thing_event(EventType.RESOURCE_UPDATED, hue_item)
             self.assertEqual(event_exp, event_out)

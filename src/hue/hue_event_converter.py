@@ -1,7 +1,12 @@
 from typing import Optional, Union
 
 from aiohue.v2 import EventType
-from aiohue.v2.models.feature import OnFeature, DimmingFeature
+from aiohue.v2.models.feature import (
+    ColorFeature,
+    ColorTemperatureFeature,
+    DimmingFeature,
+    OnFeature,
+)
 from aiohue.v2.models.grouped_light import GroupedLight
 from aiohue.v2.models.light import Light
 from aiohue.v2.models.resource import ResourceTypes
@@ -22,7 +27,7 @@ class HueEventConverter:
 
         if event_type in [EventType.RESOURCE_DELETED, EventType.DISCONNECTED]:
             e.status = ThingStatus.OFFLINE
-            return
+            return e
 
         is_on: Optional[bool] = None
 
@@ -32,6 +37,12 @@ class HueEventConverter:
 
         if is_on is not None and hasattr(item, "dimming") and isinstance(item.dimming, DimmingFeature):
             e.brightness = item.dimming.brightness if is_on else 0
+
+        if hasattr(item, "color_temperature") and isinstance(item.color_temperature, ColorTemperatureFeature):
+            if item.color_temperature.mirek is not None:
+                e.color_temp = item.color_temperature.mirek
+        if hasattr(item, "color") and isinstance(item.color, ColorFeature) and item.color.xy:
+            e.color_xy = (item.color.xy.x, item.color.xy.y)
 
         if type is not None:
             e.type = type

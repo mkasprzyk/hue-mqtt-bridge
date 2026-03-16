@@ -86,8 +86,13 @@ class MqttProxy:
 
     @classmethod
     def ensure_string(cls, value_in) -> str:
+        if value_in is None:
+            return ""
+        if isinstance(value_in, str):
+            return value_in
         if isinstance(value_in, bytes):
             return value_in.decode("utf-8")
+        return str(value_in)
 
     def process_thing_commands(self):
         """dispatch incoming MQTT command to devices"""
