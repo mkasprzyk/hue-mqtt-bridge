@@ -136,7 +136,7 @@ async def testable_main(
         if run_mode == RunMode.JSON_SCHEMA:
             AppConfig.print_config_file_json_schema()
         elif run_mode == RunMode.DISCOVER:
-            await HueExplorer.discover()
+            await HueExplorer.discover(config_file=config_file)
         elif run_mode == RunMode.EXPLORE:
             await hue_connector.run_cli_tools()  # no loop
         elif run_mode == RunMode.CREATE_APP_KEY:
