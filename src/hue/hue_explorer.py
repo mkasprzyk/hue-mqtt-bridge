@@ -1,10 +1,14 @@
 import logging
+import os
 import typing
 from collections import OrderedDict
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 import attr
-from aiohue.discovery import discover_nupnp
+import yaml
+import aiohttp
+from aiohue.discovery import DiscoveredHueBridge, discover_nupnp
+from aiohue.util import normalize_bridge_id
 from aiohue.v2 import DevicesController, LightsController, GroupsController
 from aiohue.v2.models.resource import ResourceTypes
 from aiohue.v2.models.room import Room
@@ -29,14 +33,67 @@ class HueCache:
     lights: typing.OrderedDict[str, LightsController] = None
 
 
+async def _discover_bridge_no_ssl_verify(host: str) -> Optional[DiscoveredHueBridge]:
+    """Discover bridge at host with SSL verify disabled (for self-signed certs, e.g. from Docker)."""
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession() as session:
+        url = f"http://{host}/api/config"
+        async with session.get(url, timeout=timeout, allow_redirects=False) as res:
+            if res.status in (301, 302, 307, 308):
+                loc = res.headers.get("Location") or "/api/config"
+                url = loc if loc.startswith("http") else f"https://{host}{loc}"
+                async with session.get(url, timeout=timeout, ssl=False) as res2:
+                    res2.raise_for_status()
+                    data = await res2.json()
+            else:
+                res.raise_for_status()
+                data = await res.json()
+        if "bridgeid" not in data:
+            return None
+        bridge_id = normalize_bridge_id(data["bridgeid"])
+        supports_v2 = False
+        try:
+            async with session.get(
+                f"https://{host}/clip/v2/resource",
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False,
+                raise_for_status=False,
+            ) as v2_res:
+                supports_v2 = v2_res.status == 403
+        except Exception:  # pylint: disable=broad-except
+            pass
+        return DiscoveredHueBridge(host=host, id=bridge_id, supports_v2=supports_v2)
+
+
 class HueExplorer(HueConnectorBase):
 
     @classmethod
-    async def discover(cls):
+    async def discover(cls, config_file: Optional[str] = None):
         _logger.debug("discover")
         print("\nDiscovering Hue bridges...\n")
 
         bridges = await discover_nupnp()
+
+        # Fallback: if NUPnP found nothing (e.g. from Docker) and config has hue_bridge.host, try that
+        # Use no-SSL-verify so self-signed bridge cert works (e.g. in Docker)
+        if not bridges and config_file and os.path.isfile(config_file):
+            try:
+                with open(config_file, "r") as f:
+                    data = yaml.safe_load(f) or {}
+                host = (data.get("hue_bridge") or {}).get("host", "").strip()
+                if host and "<" not in host:
+                    print(f"Trying bridge at {host} from config...")
+                    try:
+                        bridge = await _discover_bridge_no_ssl_verify(host)
+                        if bridge:
+                            bridges = [bridge]
+                        else:
+                            print(f"Could not reach {host}: no valid bridge response.")
+                    except Exception as e:  # pylint: disable=broad-except
+                        print(f"Could not reach {host}: {e}")
+            except Exception as e:  # pylint: disable=broad-except
+                print(f"Could not read config for fallback: {e}")
+
         if bridges:
             for bridge in bridges:
                 support_info = "" if bridge.supports_v2 else " Bridge is NOT supported (not V2)!"

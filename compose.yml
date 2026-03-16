@@ -1,0 +1,27 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    # No auth – for local testing only.
+
+  hue-mqtt-bridge:
+    build: .
+    depends_on:
+      - mosquitto
+    # Container can reach host network (Hue bridge on LAN) by default. If not: uncomment below
+    # and set mqtt.host in config to the host IP (e.g. 192.168.1.x) to connect to Mosquitto.
+    # network_mode: host
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Entrypoint sets 600 on this file (app requires it for sensitive data).
+      # Replace with your own file containing Hue bridge host and app_key.
+      - ./docker/hue-mqtt-bridge.yaml:/config/hue-mqtt-bridge.yaml
+    restart: "no"
+
+volumes:
+  mosquitto_data:

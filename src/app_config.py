@@ -118,10 +118,12 @@ class AppConfig:
         if not os.path.isfile(config_file):
             raise FileNotFoundError('config file ({}) does not exist!'.format(config_file))
 
-        permissions = oct(os.stat(config_file).st_mode & 0o777)[2:]
-        if permissions != "600":
-            extra = "change via 'chmod'. this config file may contain sensitive information."
-            raise PermissionError(f"wrong config file permissions ({config_file}: expected 600, got {permissions})! {extra}")
+        # Skip permission check for paths under /config/ (typical Docker mount)
+        if not config_file.startswith("/config/"):
+            permissions = oct(os.stat(config_file).st_mode & 0o777)[2:]
+            if permissions != "600":
+                extra = "change via 'chmod'. this config file may contain sensitive information."
+                raise PermissionError(f"wrong config file permissions ({config_file}: expected 600, got {permissions})! {extra}")
 
     @classmethod
     def print_config_file_json_schema(cls):

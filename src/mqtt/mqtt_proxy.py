@@ -43,8 +43,11 @@ class MqttProxy:
             while True:
                 if self._mqtt_client.is_connected():
                     topics = list(self._command_subscriptions.keys())
-                    self._mqtt_client.subscribe(topics)
-                    _logger.info("connected + subscribed")
+                    if topics:
+                        self._mqtt_client.subscribe(topics)
+                        _logger.info("connected, subscribed to %d topic(s)", len(topics))
+                    else:
+                        _logger.info("connected (no command topics)")
                     break
 
                 await asyncio.sleep(0.005)
